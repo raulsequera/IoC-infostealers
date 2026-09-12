@@ -1,0 +1,26 @@
+name: Custom.TFM.Control.DPAPI
+type: CLIENT_EVENT
+description: |
+  Descifrado DPAPI. Suscripcion ETW al proveedor Microsoft-Windows-Crypto-DPAPI,
+  necesaria porque Sysmon no instrumenta las llamadas criptograficas.
+
+  Es streaming y no termina, por lo que va como artefacto de monitorizacion
+  (Client Events) y NO como coleccion.
+
+  El GUID del proveedor se obtiene de la propia maquina con:
+      Get-WinEvent -ListProvider Microsoft-Windows-Crypto-DPAPI
+
+parameters:
+  - name: DpapiGuid
+    default: '{89fe8f40-cdce-464e-8217-15ef97d4c7c3}'
+
+sources:
+  - query: |
+      -- Se recogen todos los eventos del proveedor. El filtrado se aplica
+      -- despues, al analizar los datos.
+      SELECT System.TimeStamp AS Timestamp,
+             System.ProcessID AS PID,
+             System.ID AS EtwEventId,
+             System,
+             EventData
+      FROM watch_etw(guid=DpapiGuid)

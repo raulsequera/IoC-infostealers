@@ -1,0 +1,20 @@
+-- B3 -- CORROBORACION (n=1)
+-- Creacion de un binario del sistema habitualmente usado como anfitrion de
+-- process hollowing, cuando no lo lanza un entorno de desarrollo.
+--
+-- El process hollowing crea un proceso nuevo a partir de un binario legitimo,
+-- sustituye su contenido en memoria y lo reanuda. Cuando se hace mediante
+-- SetThreadContext y ResumeThread no interviene CreateRemoteThread, por lo que
+-- no se genera Sysmon ID 8: el escenario de inyeccion es estructuralmente ciego
+-- a esta variante y esta consulta observa su huella indirecta.
+--
+-- La discriminacion es por QUIEN lanza el proceso, no por donde esta ubicado:
+-- la consulta no comprueba la ruta del padre.
+--
+-- Fuente requerida: Custom.TFM.Control.Streaming / ProcessCreate (Sysmon ID 1)
+
+SELECT Timestamp, PID, Image, CommandLine, ParentImage, ParentPID
+FROM source(client_id='C.XXXXXXXXXXXXXXXX',
+            artifact='Custom.TFM.Control.Streaming/ProcessCreate')
+WHERE Image =~ '''\\(MSBuild|RegSvcs|RegAsm|vbc|csc)\.exe$'''
+  AND NOT ParentImage =~ 'devenv\.exe|msbuild\.exe'

@@ -1,0 +1,14 @@
+-- A2
+-- Un proceso que no es el navegador lee Local State, el fichero que contiene la
+-- clave del perfil protegida con App-Bound Encryption.
+--
+-- A diferencia de A1, aqui la lista de exclusion SI es necesaria: explorer.exe
+-- lee Local State de forma benigna.
+--
+-- Fuente requerida: Custom.TFM.Control.Streaming / S1_Read_4663 (Security 4663)
+
+SELECT Timestamp, ProcessName, ObjectName, AccessMask
+FROM source(client_id='C.XXXXXXXXXXXXXXXX',
+            artifact='Custom.TFM.Control.Streaming/S1_Read_4663')
+WHERE ObjectName =~ 'Local State'
+  AND NOT ProcessName =~ '''\\Windows\\explorer\.exe$|\\System32\\dllhost\.exe$|\\SearchIndexer\.exe$'''

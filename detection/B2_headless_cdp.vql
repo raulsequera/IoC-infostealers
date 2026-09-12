@@ -1,0 +1,15 @@
+-- B2 -- CORROBORACION (n=1)
+-- Navegador lanzado en modo headless y controlado por el protocolo DevTools.
+-- Segunda via de evasion de App-Bound Encryption: en lugar de recuperar la
+-- clave, se controla el propio navegador.
+--
+-- Senal de alta calidad y coste bajo: ningun proceso benigno de la linea base
+-- utiliza el flag de puerto de depuracion.
+--
+-- Fuente requerida: Custom.TFM.Control.Streaming / ProcessCreate (Sysmon ID 1)
+
+SELECT Timestamp, PID, Image, CommandLine, ParentImage
+FROM source(client_id='C.XXXXXXXXXXXXXXXX',
+            artifact='Custom.TFM.Control.Streaming/ProcessCreate')
+WHERE CommandLine =~ 'remote-debugging-port|--headless'
+  AND Image =~ 'chrome\.exe|msedge\.exe'

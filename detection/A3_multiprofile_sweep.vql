@@ -1,0 +1,22 @@
+-- A3 -- BARRIDO MULTIPERFIL
+-- Un mismo proceso lee el directorio User Data de mas de un navegador. Recupera
+-- los casos en que el canal 4663 registra el acceso a nivel de directorio pero
+-- no al fichero.
+--
+-- Esta consulta no devuelve solo coincidencias: agrupa y emite una fila por
+-- proceso que haya tocado User Data. Se considera que A3 dispara cuando
+-- BarridoMultiPerfil es verdadero.
+--
+-- Fuente requerida: Custom.TFM.Control.Streaming / S1_Read_4663 (Security 4663)
+
+SELECT ProcessName,
+       enumerate(items=ObjectName) AS ObjetosTocados,
+       count(items=filter(list=enumerate(items=ObjectName),
+                          regex='Google.\\Chrome')) > 0
+       AND count(items=filter(list=enumerate(items=ObjectName),
+                          regex='Microsoft.\\Edge')) > 0 AS BarridoMultiPerfil
+FROM source(client_id='C.XXXXXXXXXXXXXXXX',
+            artifact='Custom.TFM.Control.Streaming/S1_Read_4663')
+WHERE ObjectName =~ 'User Data'
+  AND NOT ProcessName =~ '''\\Windows\\explorer\.exe$|\\System32\\dllhost\.exe$|\\SearchIndexer\.exe$'''
+GROUP BY ProcessName

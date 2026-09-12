@@ -1,0 +1,19 @@
+-- B1 -- CORROBORACION (n=1)
+-- Inyeccion de hilo en un proceso de navegador en ejecucion. Es una de las vias
+-- de evasion de App-Bound Encryption: en lugar de recuperar la clave, se opera
+-- desde dentro del propio navegador.
+--
+-- La ultima condicion excluye un inyector ambiental observado en el entorno de
+-- analisis, que lanza hilos desde un directorio con nombre aleatorio.
+--
+-- S3_RemoteThread no exporta identificadores de proceso, por lo que la
+-- correlacion se hace por imagen.
+--
+-- Fuente requerida: Custom.TFM.Control.Streaming / S3_RemoteThread (Sysmon ID 8)
+
+SELECT Timestamp, SourceImage, TargetImage, StartFunction, StartModule
+FROM source(client_id='C.XXXXXXXXXXXXXXXX',
+            artifact='Custom.TFM.Control.Streaming/S3_RemoteThread')
+WHERE TargetImage =~ 'chrome\.exe|msedge\.exe'
+  AND SourceImage =~ '''\\Framework\\|\\Temp\\|\\AppData\\'''
+  AND NOT SourceImage =~ '''\\[a-z0-9]{8}\\bin\\'''

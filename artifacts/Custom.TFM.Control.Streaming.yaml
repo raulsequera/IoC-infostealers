@@ -1,0 +1,103 @@
+name: Custom.TFM.Control.Streaming
+type: CLIENT_EVENT
+description: |
+  Streaming de Sysmon, Security 4663 y conexiones de red. Sobrevive al revert de
+  snapshot del sandbox. Cubre el arbol de procesos, los cuatro escenarios de
+  robo y el canal de C2.
+
+  IMPORTANTE: la fuente S1_Read_4663 no produce ningun evento si la politica de
+  auditoria no tiene habilitada la subcategoria Acceso a objetos / Sistema de
+  archivos y los directorios de perfil de los navegadores no llevan una SACL
+  que solicite la auditoria de lectura.
+
+parameters:
+  - name: SysmonEvtx
+    default: '%SystemRoot%\System32\winevt\Logs\Microsoft-Windows-Sysmon%4Operational.evtx'
+  - name: SecurityEvtx
+    default: '%SystemRoot%\System32\winevt\Logs\Security.evtx'
+  - name: VelociraptorFrontendPort
+    description: Puerto del frontend de Velociraptor. Se excluye del canal de red
+      para que las comunicaciones del propio cliente con el servidor no lo saturen.
+      Ajustar al despliegue propio.
+    default: 8001
+    type: int
+
+sources:
+  - name: ProcessCreate
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.ProcessId AS PID,
+             EventData.Image AS Image,
+             EventData.CommandLine AS CommandLine,
+             EventData.ParentProcessId AS ParentPID,
+             EventData.ParentImage AS ParentImage,
+             EventData.User AS User,
+             EventData.IntegrityLevel AS IntegrityLevel
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 1
+
+  - name: S1_FileCreate
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             System.EventID.Value AS EventID,
+             EventData.Image AS Image,
+             EventData.TargetFilename AS TargetFilename,
+             EventData.ProcessId AS PID
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 11
+        AND TargetFilename =~ "User Data|Login Data|Cookies|Web Data"
+        AND NOT Image =~ "chrome|msedge|brave|firefox|opera|iexplore"
+
+  - name: S1_Read_4663
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.ProcessName AS ProcessName,
+             EventData.ObjectName AS ObjectName,
+             EventData.AccessMask AS AccessMask
+      FROM watch_evtx(filename=expand(path=SecurityEvtx))
+      WHERE System.EventID.Value = 4663
+        AND ObjectName =~ "User Data|Login Data|Cookies|Web Data"
+        AND NOT ProcessName =~ "chrome|msedge|brave|firefox|opera|iexplore"
+
+  - name: S3_RemoteThread
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.SourceImage AS SourceImage,
+             EventData.TargetImage AS TargetImage,
+             EventData.StartFunction AS StartFunction,
+             EventData.StartModule AS StartModule
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 8
+
+  - name: S3_ProcessAccess_LSASS
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.SourceImage AS SourceImage,
+             EventData.TargetImage AS TargetImage,
+             EventData.GrantedAccess AS GrantedAccess
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 10
+        AND TargetImage =~ "lsass.exe"
+
+  - name: S4_StagingArchiveTemp
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.Image AS Image,
+             EventData.TargetFilename AS TargetFilename,
+             EventData.ProcessId AS PID
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 11
+        AND TargetFilename =~ "AppData.Local.Temp"
+        AND TargetFilename =~ "(zip|rar|tar)$"
+
+  - name: C2_Control_InetSim
+    query: |
+      SELECT System.TimeCreated.SystemTime AS Timestamp,
+             EventData.Image AS Image,
+             EventData.DestinationIp AS DestinationIp,
+             EventData.DestinationPort AS DestinationPort,
+             EventData.Initiated AS Initiated
+      FROM watch_evtx(filename=expand(path=SysmonEvtx))
+      WHERE System.EventID.Value = 3
+        AND EventData.Initiated = TRUE
+        AND NOT EventData.DestinationPort = VelociraptorFrontendPort
